@@ -216,6 +216,88 @@ const struct file_operations mode_fops = {
 	.llseek = default_llseek,
 };
 
+static int rssi_seq_read(struct seq_file *seq, void *offset)
+{
+	struct ws_monif *monif = (struct ws_monif *)seq->private;
+	struct ws_hash *hash = &monif->hash;
+	struct hlist_head *head;
+	struct ws_sta *ws_sta;
+	int i;
+
+	if (!atomic_read(&monif->active))
+		return -1;
+
+	ws_sta_seq_print_rssi_plain_head(seq);
+
+	for (i = 0; i < WS_HASH_SIZE; i++) {
+		head = &hash->table[i];
+
+		rcu_read_lock();
+		hlist_for_each_entry_rcu(ws_sta, head, hash_entry) {
+			ws_sta_seq_print_rssi_plain(ws_sta, seq);
+		}
+		rcu_read_unlock();
+	}
+
+	return 0;
+}
+
+static int rssi_seq_reset(struct seq_file *seq, void *offset)
+{
+	struct ws_monif *monif = (struct ws_monif *)seq->private;
+	struct ws_hash *hash = &monif->hash;
+	struct hlist_head *head;
+	struct hlist_node *tmp;
+	struct ws_sta *ws_sta;
+	spinlock_t *list_lock;
+	int i;
+
+	if (!atomic_read(&monif->active))
+		return -1;
+
+	ws_sta_seq_print_rssi_plain_head(seq);
+
+	for (i = 0; i < WS_HASH_SIZE; i++) {
+		head = &hash->table[i];
+		list_lock = &hash->list_locks[i];
+
+		/* TODO: can we write while doing spinlocks?! */
+		spin_lock_bh(list_lock);
+		hlist_for_each_entry_safe(ws_sta, tmp, head, hash_entry) {
+			ws_sta_seq_print_rssi_plain(ws_sta, seq);
+			hlist_del_rcu(&ws_sta->hash_entry);
+			ws_sta_free_ref(ws_sta);
+		}
+		spin_unlock_bh(list_lock);
+	}
+
+	return 0;
+}
+
+static int rssi_debug_open(struct inode *inode, struct file *file)
+{
+	struct ws_monif *monif = (struct ws_monif *) inode->i_private;
+
+	if (!atomic_read(&monif->active))
+		return -1;
+
+	switch (monif->ws_mode) {
+	case MODE_READ:
+		return single_open(file, rssi_seq_read, monif);
+	default:
+	case MODE_RESET:
+		return single_open(file, rssi_seq_reset, monif);
+	}
+}
+
+struct file_operations rssi_fops = {
+	.owner = THIS_MODULE,
+	.open = rssi_debug_open,
+	.read = seq_read,
+	.llseek= seq_lseek,
+	.release = single_release,
+};
+
 void ws_debugfs_monif_init(struct ws_monif *monif)
 {
 	struct dentry *file;
@@ -242,6 +324,12 @@ void ws_debugfs_monif_init(struct ws_monif *monif)
 	file = debugfs_create_file("mode",
 				   S_IFREG | S_IRUGO | S_IWUGO, monif->dir,
 				   monif, &mode_fops);
+	if (!file)
+		goto err;
+
+	file = debugfs_create_file("rssi",
+				   S_IFREG | S_IRUGO, monif->dir, monif,
+				   &rssi_fops);
 	if (!file)
 		goto err;
 
