@@ -153,6 +153,22 @@ static void ws_sta_seq_print_detail_plain(struct ws_sta_detailed *detail,
 		   (int)(ewma_read(&detail->ewma) - (INT_MAX>>2)));
 }
 
+void ws_sta_seq_print_rssi_plain(struct ws_sta *ws_sta, struct seq_file *seq)
+{
+	seq_printf(seq, "%pM ", ws_sta->mac);
+	seq_printf(seq, "%10d ", jiffies_to_msecs(jiffies - ws_sta->last_seen));
+	ws_sta_seq_print_detail_plain(&ws_sta->signal, seq);
+	seq_printf(seq, "\n");
+
+}
+
+void ws_sta_seq_print_rssi_plain_head(struct seq_file *seq)
+{
+	seq_puts(seq, "              mac        seen        last         min ");
+	seq_puts(seq, "        max       count         sum       sum2 ");
+	seq_puts(seq, "       ewma\n");
+}
+
 static void ws_sta_detailed_apply(struct ws_sta_detailed *detail, int value)
 {
 	detail->last = value;
