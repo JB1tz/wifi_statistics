@@ -148,7 +148,7 @@ static void ws_sta_seq_print_detail_plain(struct ws_sta_detailed *detail,
 	seq_printf(seq, "% 10d ", detail->max);
 	seq_printf(seq, "% 10d ", detail->count);
 	seq_printf(seq, "% 10d ", detail->sum);
-	seq_printf(seq, "% 10llu ", detail->sum_square);
+	seq_printf(seq, "%10llu ", detail->sum_square);
 	seq_printf(seq, "% 10d",
 		   (int)(ewma_read(&detail->ewma) - (INT_MAX>>2)));
 }

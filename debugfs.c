@@ -298,6 +298,52 @@ struct file_operations rssi_fops = {
 	.release = single_release,
 };
 
+static ssize_t read_file_num_packets(struct file *file, char __user *user_buf,
+				     size_t count, loff_t *ppos)
+{
+	struct ws_monif *monif = (struct ws_monif *) file->private_data;
+	char num_packets[12];
+	ssize_t len;
+
+	len = sprintf(num_packets, "%u\n", atomic_read(&monif->num_packets));
+
+	return simple_read_from_buffer(user_buf, count, ppos, num_packets, len);
+}
+
+static ssize_t write_file_num_packets(struct file *file,
+				      const char __user *user_buf,
+				      size_t count, loff_t *ppos)
+{
+	struct ws_monif *monif = (struct ws_monif *) file->private_data;
+	unsigned long int num_packets;
+	char buf[32];
+	ssize_t len;
+
+	len = min(count, sizeof(buf) - 1);
+	if (copy_from_user(buf, user_buf, len))
+		return -EFAULT;
+
+	buf[len] = '\0';
+
+	if (kstrtoul(buf, 0, &num_packets))
+		return -EINVAL;
+
+	if (num_packets > WS_MAX_PACKETS)
+		return -EINVAL;
+
+	atomic_set(&monif->num_packets, num_packets);
+
+	return count;
+}
+
+const struct file_operations num_packets_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.write = write_file_num_packets,
+	.read = read_file_num_packets,
+	.llseek = default_llseek,
+};
+
 void ws_debugfs_monif_init(struct ws_monif *monif)
 {
 	struct dentry *file;
@@ -330,6 +376,12 @@ void ws_debugfs_monif_init(struct ws_monif *monif)
 	file = debugfs_create_file("rssi",
 				   S_IFREG | S_IRUGO, monif->dir, monif,
 				   &rssi_fops);
+	if (!file)
+		goto err;
+
+	file = debugfs_create_file("num_packets",
+				   S_IFREG | S_IRUGO | S_IWUGO, monif->dir,
+				   monif, &num_packets_fops);
 	if (!file)
 		goto err;
 

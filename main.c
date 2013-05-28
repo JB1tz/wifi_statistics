@@ -183,6 +183,7 @@ int ws_monif_register(struct net_device *net_dev)
 	atomic_set(&monif->active, 0);
 	monif->net_dev = net_dev;
 	monif->ws_mode = MODE_RESET;
+	atomic_set(&monif->num_packets, 2);
 	atomic_set(&monif->refcount, 2);
 
 	list_add_tail_rcu(&monif->list, &monif_list);
