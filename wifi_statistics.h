@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013:
- *	Simon Wunderlich <siwu@hrz.tu-chemnitz.de>
+ *	Simon Wunderlich <sw@simonwunderlich.de>
  *	Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or
@@ -31,7 +31,7 @@
 #include <net/ieee80211_radiotap.h>
 #include "compat.h"		/* remove if sending this upstream */
 
-#define WIFI_STATS_DRIVER_AUTHOR  "Simon Wunderlich <siwu@hrz.tu-chemnitz.de>"
+#define WIFI_STATS_DRIVER_AUTHOR  "Simon Wunderlich <sw@simonwunderlich.de>"
 #define WIFI_STATS_DRIVER_DESC	  "WiFi statistics"
 #define WIFI_STATS_DRIVER_DEVICE  "wifi_statistics"
 #define WIFI_STATS_SOURCE_VERSION "broken"
@@ -112,6 +112,7 @@ struct ws_sta *ws_hash_get(struct ws_hash *hash, u8 *mac);
 void ws_sta_free_ref(struct ws_sta *ws_sta);
 void ws_sta_init(struct ws_sta *ws_sta);
 int ws_sta_general(struct ws_sta *ws_sta, struct sk_buff *skb);
+struct ws_sta *ws_hash_find(struct ws_hash *hash, u8 *mac);
 int ws_sta_parse_ieee80211_hdr(struct ws_sta *ws_sta,
 			       struct ieee80211_hdr *hdr, int len);
 int ws_sta_parse_radiotap(struct ws_sta *ws_sta,

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013:
- *	Simon Wunderlich <siwu@hrz.tu-chemnitz.de>
+ *	Simon Wunderlich <sw@simonwunderlich.de>
  *	Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
  *
  * This program is free software; you can redistribute it and/or
@@ -55,6 +55,34 @@ ws_monif_free_ref(struct ws_monif *monif)
 		call_rcu(&monif->rcu, ws_monif_free_rcu);
 }
 
+bool ws_is_badfcs(struct ieee80211_radiotap_header *rthdr, int len)
+{
+	struct ieee80211_radiotap_iterator iterator;
+	int ret;
+
+	ret = ieee80211_radiotap_iterator_init(&iterator, rthdr, len, NULL);
+
+	while (!ret) {
+		ret = ieee80211_radiotap_iterator_next(&iterator);
+
+		if (ret)
+			continue;
+
+		switch (iterator.this_arg_index) {
+		case IEEE80211_RADIOTAP_FLAGS:
+			if (*iterator.this_arg & (IEEE80211_RADIOTAP_F_BADFCS))
+				return true;
+			else
+				return false;
+			break;
+		default:
+			break;
+		}
+	}
+
+	return false;
+}
+
 rx_handler_result_t ws_handle_frame(struct sk_buff **pskb)
 {
 	struct ieee80211_radiotap_header *rthdr;
@@ -96,9 +124,9 @@ rx_handler_result_t ws_handle_frame(struct sk_buff **pskb)
 	if (unlikely(!pskb_may_pull(skb, hdrlen)))
 		goto end;
 
-	if (ieee80211_is_cts(fc) || ieee80211_is_ack(fc))
+	if (ieee80211_is_cts(fc) || ieee80211_is_ack(fc)) {
 		mac = nullmac;
-	else
+	} else {
 		/* transmitter address is always addr2:
 		 *  * SA in an IBSS frame or To-AP frame
 		 *  * BSSID in an in a From-AP frame
@@ -106,11 +134,25 @@ rx_handler_result_t ws_handle_frame(struct sk_buff **pskb)
 		 */
 		mac = hdr->addr2;
 
+		/* if the frame has a bad FCS, try to find the station
+		 * in the hash, assuming that the source mac is still usable.
+		 * If it can't be found, use the packet on the null source.
+		 */
+		if (ws_is_badfcs(rthdr, len)) {
+			ws_sta = ws_hash_find(&monif->hash, mac);
+			if (ws_sta)
+				goto have_ws_sta;
+			else
+				mac = nullmac;
+		}
+	}
+
 	ws_sta = ws_hash_get(&monif->hash, mac);
 
 	if (!ws_sta)
 		goto end;
 
+have_ws_sta:
 	ws_sta_general(ws_sta, skb);
 	ws_sta_parse_radiotap(ws_sta, rthdr, len);
 	ws_sta_parse_ieee80211_hdr(ws_sta, hdr, hdrlen);
@@ -210,7 +252,7 @@ void ws_monif_unregister(struct ws_monif *monif)
 static int ws_if_notification(struct notifier_block *this,
 			      unsigned long event, void *ptr)
 {
-	struct net_device *net_dev = ptr;
+	struct net_device *net_dev = netdev_notifier_info_to_dev(ptr);
 	struct ws_monif *monif;
 
 	monif = ws_monif_get(net_dev);
